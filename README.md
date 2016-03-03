@@ -304,5 +304,117 @@ Fieldsets are specified per link name for included resources, or `$self` for the
 
 #### Filtering
 
+Resource collections can be filtered; attempts to filter a resource which isn't a collection will result in an HTTP `400`.  The server does not have to implement filtering for all fields or even at all; filtering by unsupported fields should also result in a `400`.
+
+Filtering is effected via the `filter` query parameter. E.g., to get all the posts with `authorId` of `1`, you would make a request to `GET /api/posts?filter[authorId]=1`.  You can filter on more than one field: the criteria are combined with a logical `AND`.  The values of the criteria are to be interpreted as JSON fragments, thus to search for users named 'Bob', you'd make a request to `GET /api/users?filter[name]='Bob'`.  It's up to the application whether to be case sensitive or not for string comparisons.
+
+You can filter using multiple values (analagous to the SQL `IN` keyword) by using a comma-separated list.  E.g., for all posts belonging to authors 1 or 2, a request is made to `GET /api/posts?filter[authorId]=1,2`.
+
+Nested fields would be filtered by putting the child name in square brackets like so: `?filter[parent][child]=value`.
+
+
+#### Sorting
+
+Similarly, resource collections can be sorted; attempts to sort a resource which isn't a collection will result in an HTTP `400`.  Sorting by unsupported fields should also result in a `400`.
+
+To sort, a comma-separated list of (1 or more) fields to sort by is passed into the `sort` parameter.  To sort descending, the field name is prefixed with a dash (`-`).  E.g., to sort by the `name` field, you would use `?sort=name`, and to sort by `name` and then by `age` descending, you would use `?sort=name,-age`.
 
 #### Paging
+
+Again, resource collections can be paged using the `page` parameter; attempts to page a resource which isn't a collection will result in an HTTP `400`, as should attempts to use a method of paging which the server doesn't support.
+
+There are 3 types of paging:
+
+  * number based: `page[number]` and `page[size]` for regular 1-based index paging
+
+    For example, `?page[number]=1&page[size]=10` will give you rows 0-9, and `?page[number]=4&page[size]=5` will give you rows 14-19.
+
+  * offset based: `page[offset]` and `page[size]`
+
+    The above examples would instead be written as `?page[offset]=0&page[size]=10` and `?page[offset]=14&page[size]=5` respectively.
+
+  * fast paging: `page[after]` and `page[size]` for fast paging like they use on Reddit
+
+    Using this method means you can avoid a costly index/table scan which is useful in huge collections:  `page[after]` is set to a field value and `page[size]` has its usual meaning.  If the collection is by default sorted by ID, then `page[after]` works on the ID field by default.  If there is a custom sort applied, then `page[after]` works on the major sort field (i.e., the first in a list of fields to sort by).
+
+    For example, `?page[after]=5&page[size]=10` would get the 10 rows with ID field greater than `5`, and `?page[after]='Zack'&page[size]=5&sort=-name` would get the 5 rows with name less (by collation, ASCII, whatever is application-defined) than `'Zack'`.
+
+
+The server is free to pick a sensible default method of paging, and default value for `page[size]`.  It may also choose to ignore `page[size]` altogether, or after a certain maximum page size.  The `$next`, `$previous`, `$first` and `$last` links returned should match the method of paging used by the request.
+
+
+### Creating
+
+Resources are created by `POST`ing a resource object to a resource collection URL.  E.g., to create a `user` resource, you would post the following body to `POST /api/users`:
+
+```json
+{
+  "attributes": {
+    "name": "Fred Flintstone",
+    "email": "fred@example.com"
+  }
+}
+```
+
+In the response, the server sets the `Location` header to the URL of the newly-created resource.  It can send either an HTTP `204` with an empty body, or it can send an HTTP `201` with the object which was created (ostensibly the same as a `GET` request to the `Location` URL).  The latter can be useful in the case of generated fields.
+
+The server can perform validation on the request body before accepting it: if the validation fails, the server should respond with an HTTP `400` and an error object giving sufficient information as to what caused the validation failure.
+
+
+### Updating
+
+Resources can be updated by sending a `PATCH` request containing a single resource object to the individual resource URL, or by sending `PATCH` request containing a resource collection object to the resource collection URL.  Sending a collection to a single resource or vice versa will result in an HTTP `409`.
+
+For example, to update user `1`, a request can be made to `PATCH /api/users/1`, with the following body:
+
+```json
+{
+  "attributes": {
+    "name": "Fred Flintstone",
+    "email": "fred@example.com"
+  }
+}
+```
+
+The specified fields will then be updated with the specified values.  The same effect could be achieved by sending a collection object to `PATCH /api/users`:
+
+```json
+{
+  "elements": {
+    "http://blog/api/users/1": {
+      "attributes": {
+        "name": "Fred Flintstone",
+        "email": "fred@example.com"
+      }
+    }
+  }
+}
+```
+
+If the ID URL is invalid for the request endpoint, an HTTP `409` is returned.
+
+Resources can also be updated using the HTTP `PUT` method: in contrast to `PATCH`, this replaces the entire object to be updated with the request object, rather than updating only the specified fields.
+
+
+### Deleting
+
+Deleting a resource is simply a matter of making a `DELETE` request to the resource URL.  The server can support deletion of all objects in a collection by supporting `DELETE` requests to the resource collection URL.
+
+
+### General
+
+The server doesn't have to support all methods above.  If an unsupported method is used, the server responds with an HTTP `405`.
+
+Making a `GET` request to the API route should return a result with links to each of the resources.  E.g. in our blog example, making a request to `GET /api` would return the following document:
+
+```json
+{
+  "$self": {
+    "links": {
+      "posts": "http://blog/api/posts",
+      "users": "http://blog/api/users",
+      "comments": "http://blog/api/comments"
+    }
+  }
+}
+```
