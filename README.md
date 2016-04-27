@@ -15,54 +15,68 @@ We'll use the canonical example of a blog system to whet your appetite.  Below i
 
 ```json
 {
-  "$self": {
-    "links": {
-      "$next": "https://blog/api/posts?page[number]=2"
-    },
-    "elements": {
-      "https://blog/api/posts/1": {
-        "links": {
-          "author": "https://blog/api/users/1",
-          "comments": "https://blog/api/posts/1/comments"
-        },
-        "attributes": {
-          "title": "Hello, world!",
-          "content": "This is a test post."
-        }
+  "links": {
+    "$next": "https://blog/api/posts?page[number]=2"
+  },
+  "elements": [
+    {
+      "links": {
+        "$self": "https://blog/api/posts/1",
+        "author": "https://blog/api/users/1",
+        "comments": "https://blog/api/posts/1/comments"
       },
-      "https://blog/api/posts/2": {
-        "links": {
-          "author": "https://blog/api/users/1",
-          "comments": "https://blog/api/posts/2/comments"
-        },
-        "attributes": {
-          "title": "Test post 2",
-          "content": "This is second test post."
-        }
+      "attributes": {
+        "title": "Hello, world!",
+        "content": "This is a test post."
       }
     },
-    "meta": {
-      "count": 8
-    }
-  },
-  "https://blog/api/users/1": {
-    "attributes": {
-      "name": "Fred Flintstone",
-      "email": "fred@example.com"
-    }
-  },
-  "https://blog/api/posts/1/comments": {
-    "elements": {
-      "https://blog/api/comments/1": {
-        "attributes": {
-          "content": "This is a comment!"
-        }
+    {
+      "links": {
+        "$self": "https://blog/api/posts/2",
+        "author": "https://blog/api/users/1",
+        "comments": "https://blog/api/posts/2/comments"
+      },
+      "attributes": {
+        "title": "Test post 2",
+        "content": "This is second test post."
       }
     }
+  ],
+  "meta": {
+    "count": 8
   },
-  "https://blog/api/posts/2/comments": {
-    "elements": {}
-  }
+  "includes": [
+    {
+      "links": {
+        "$self": "https://blog/api/users/1"
+      },
+      "attributes": {
+        "name": "Fred Flintstone",
+        "email": "fred@example.com"
+      }
+    },
+    {
+      "links": {
+        "$self": "https://blog/api/posts/1/comments"
+      },
+      "elements": [
+        {
+          "links": {
+            "$self": "https://blog/api/comments/1"
+          },
+          "attributes": {
+            "content": "This is a comment!"
+          }
+        }
+      ]
+    },
+    {
+      "links": {
+        "$self": "https://blog/api/posts/2/comments"
+      },
+      "elements": []
+    }
+  ]
 }
 ```
 
@@ -115,73 +129,63 @@ And it might have a `meta` field, which can have any implementation specific dat
 }
 ```
 
-How about collections of resources?  These are given in the `elements` field of the resource object.  Resources are identified by their URL, and the `elements` field is thus a hash of resource objects keyed by URL:
+How about collections of resources?  These are given in the `elements` field of the resource object.
 
 ```json
 {
-  "elements": {
-    "https://blog/api/users/1": {
+  "elements": [
+    {
+      "links": {
+        "$self": "https://blog/api/users/1"
+      },
       "attributes": {
         "name": "Fred Flintstone",
         "email": "fred@example.com"
       }
     },
-    "https://blog/api/users/2": {
+    {
+      "links": {
+        "$self": "https://blog/api/users/2"
+      },
       "attributes": {
         "name": "Wilma Flintstone",
         "email": "wilma@example.com"
       }
     }
-  }
+  ]
 }
 ```
 
 Resource collections can also have `links` and `meta` fields.  We reserve the link names `$first`, `$last`, `$next`, `$previous` to refer to the first, last, next and previous pages respectively in paged responses.
 
-A complete response body consists of at least one resource object, given the ID `$self`.  For example, a request to `GET /users/1` could return:
-
-```json
-{
-  "$self": {
-    "links": {
-      "posts": "https://blog/api/posts?filter[authorId]=1"
-    },
-    "attributes": {
-      "name": "Fred Flintstone",
-      "email": "fred@example.com"
-    },
-    "meta": {
-      "postCount": 10
-    }
-  }
-}
-```
-
 If the caller requests other resources to be embedded (more on that later), or the server automatically embeds resources for performance reasons, then there will be more than one resource in the response.  For example, if the `posts` link was embedded in the above response, it would look like this:
 
 ```json
 {
-  "$self": {
-    "links": {
-      "posts": "https://blog/api/posts?filter[authorId]=1"
-    },
-    "attributes": {
-      "name": "Fred Flintstone",
-      "email": "fred@example.com"
-    },
-    "meta": {
-      "postCount": 10
-    }
+  "links": {
+    "posts": "https://blog/api/posts?filter[authorId]=1"
   },
-  "https://blog/api/posts?filter[authorId]=1": {
-    "elements": {
-      "https://blog/api/posts/1": {
-        "attributes": {
-          /* etc */
+  "attributes": {
+    "name": "Fred Flintstone",
+    "email": "fred@example.com"
+  },
+  "meta": {
+    "postCount": 10
+  },
+  "includes": [
+    {
+      "links": {
+        "$self": "https://blog/api/posts?filter[authorId]=1"
+      },
+      "elements": {
+        "https://blog/api/posts/1": {
+          "attributes": {
+            /* etc */
+          }
         }
       }
     }
-  }
+  ]
 }
 ```
 
@@ -189,20 +193,23 @@ For this reason, a client should check the response before fetching related reso
 
 ```json
 {
-  "$self": {
-    "links": {
-      "posts": "https://blog/api/posts?filter[authorId]=1"
-    },
-    "attributes": {
-      "name": "Fred Flintstone",
-      "email": "fred@example.com"
-    }
+  "links": {
+    "posts": "https://blog/api/posts?filter[authorId]=1"
   },
-  "https://blog/api/posts?filter[authorId]=1": {
-    "meta": {
-      "count": 10
+  "attributes": {
+    "name": "Fred Flintstone",
+    "email": "fred@example.com"
+  },
+  "includes": [
+    {
+      "links": {
+        "$self": "https://blog/api/posts?filter[authorId]=1"
+      },
+      "meta": {
+        "count": 10
+      }
     }
-  }
+  ]
 }
 ```
 
@@ -250,15 +257,13 @@ A blog post might define `links` called `author` and `comments`, such that `GET 
 
 ```json
 {
-  "$self": {
-    "links": {
-      "author": "https://blog/api/authors/1",
-      "comments": "https://blog/api/posts/1/comments"
-    },
-    "attributes": {
-      "title": "Hello, world!",
-      "content": "This is a test post."
-    }
+  "links": {
+    "author": "https://blog/api/authors/1",
+    "comments": "https://blog/api/posts/1/comments"
+  },
+  "attributes": {
+    "title": "Hello, world!",
+    "content": "This is a test post."
   }
 }
 ```
@@ -267,22 +272,25 @@ To include the `author` relation, you would make a request to `GET /api/posts/1?
 
 ```json
 {
-  "$self": {
-    "links": {
-      "author": "https://blog/api/users/1",
-      "comments": "https://blog/api/posts/1/comments"
-    },
-    "attributes": {
-      "title": "Hello, world!",
-      "content": "This is a test post."
-    }
+  "links": {
+    "author": "https://blog/api/users/1",
+    "comments": "https://blog/api/posts/1/comments"
   },
-  "https://blog/api/users/1": {
-    "attributes": {
-      "name": "Fred Flintstone",
-      "email": "fred@example.com"
+  "attributes": {
+    "title": "Hello, world!",
+    "content": "This is a test post."
+  },
+  "includes": [
+    {
+      "links": {
+        "$self": "https://blog/api/users/1"
+      },
+      "attributes": {
+        "name": "Fred Flintstone",
+        "email": "fred@example.com"
+      }
     }
-  }
+  ]
 }
 ```
 
@@ -380,14 +388,17 @@ The specified fields will then be updated with the specified values.  The same e
 
 ```json
 {
-  "elements": {
-    "http://blog/api/users/1": {
+  "elements": [
+    {
+      "links": {
+        "$self": "http://blog/api/users/1"
+      },
       "attributes": {
         "name": "Fred Flintstone",
         "email": "fred@example.com"
       }
     }
-  }
+  ]
 }
 ```
 
@@ -409,12 +420,10 @@ Making a `GET` request to the API route should return a result with links to eac
 
 ```json
 {
-  "$self": {
-    "links": {
-      "posts": "http://blog/api/posts",
-      "users": "http://blog/api/users",
-      "comments": "http://blog/api/comments"
-    }
+  "links": {
+    "posts": "http://blog/api/posts",
+    "users": "http://blog/api/users",
+    "comments": "http://blog/api/comments"
   }
 }
 ```
